@@ -1,5 +1,7 @@
 const express = require('express');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
+
 const app = express();
 
 app.get('/', async (req, res) => {
@@ -8,27 +10,32 @@ app.get('/', async (req, res) => {
         return res.status(400).send('Missing PDF parameter in URL.');
     }
 
+    let browser = null;
     try {
-        const browser = await puppeteer.launch({
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
-        
-        // Pass the raw HTML decoded from the query parameter
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        
-        const pdfBuffer = await page.pdf({ 
-            format: 'A4', 
-            printBackground: true 
+        browser = await puppeteer.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
         });
 
-        await browser.close();
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true
+        });
 
         res.contentType('application/pdf');
         res.send(pdfBuffer);
     } catch (err) {
         console.error(err);
         res.status(500).send('Error generating PDF: ' + err.message);
+    } finally {
+        if (browser !== null) {
+            await browser.close();
+        }
     }
 });
 
